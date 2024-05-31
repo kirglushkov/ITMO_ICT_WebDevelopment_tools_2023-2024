@@ -2,11 +2,11 @@ from typing import List
 from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 import uvicorn
 from datetime import datetime, timedelta
-from app.database import SessionLocal,  init_db, BudgetDB, ExpenseDB, UserDB, IncomeDB
-from app.models import Income, Expense, Budget, User
+from app.database import SessionLocal, init_db
+from models import BudgetDB, ExpenseDB, UserDB, IncomeDB
+from app.schemas import Income, Expense, Budget, User
 from bcrypt import hashpw, gensalt
 import jwt
 def get_db():
@@ -92,6 +92,19 @@ async def login(user: User):
             raise HTTPException(status_code=401, detail="Invalid password")
         token = generate_token(db_user.username)
         return {"access_token": token, "token_type": "bearer"}
+    
+#change password for user 
+@router.put("/users/{user_id}/password")
+async def change_password(user_id: int, new_password: str):
+    with SessionLocal() as db:
+        db_user = db.query(UserDB).filter(UserDB.id == user_id).first()
+        if db_user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        salt = gensalt()
+        db_user.password = str(hashpw(new_password.encode(), salt))
+        db.commit()
+        db.refresh(db_user)
+        return db_user
     
 
 @router.put("/users/{user_id}", response_model=User)
