@@ -64,9 +64,13 @@ async def delete_user(user_id: int):
         db.delete(db_user)
         db.commit()
         return JSONResponse(status_code=204, content="User deleted")
+    
+def verify_pwd(password: str, hashed_password: str) -> bool:
+    salt = gensalt()
+    return str(hashpw(password.encode(), salt)) == hashed_password
 
-@router.post("/users", response_model=User)
-async def create_user(user: User):
+@router.post("/users/register", response_model=User)
+async def register(user: User):
     with SessionLocal() as db:
         salt = gensalt()
         user_data = user.model_dump(exclude={'password'})
@@ -74,12 +78,7 @@ async def create_user(user: User):
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
-
         return db_user
-    
-def verify_pwd(password: str, hashed_password: str) -> bool:
-    salt = gensalt()
-    return str(hashpw(password.encode(), salt)) == hashed_password
 
 
 @router.post("/users/login")
@@ -119,6 +118,14 @@ async def update_user(user_id: int, user: User):
         db.refresh(db_user)
         return db_user
 
+@router.get("/users/{user_id}/incomes", response_model=List[Income])
+async def get_user_incomes(user_id: int):
+    with SessionLocal() as db:
+        user = db.query(UserDB).filter(UserDB.id == user_id).first()
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        incomes = db.query(IncomeDB).filter(IncomeDB.user_id == user_id).all()
+        return incomes
 
 
 app.include_router(router)
