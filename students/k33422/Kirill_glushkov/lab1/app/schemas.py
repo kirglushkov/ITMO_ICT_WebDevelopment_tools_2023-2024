@@ -9,6 +9,11 @@ class User(BaseModel):
     username: str
     email: str
 
+class UserLogin(BaseModel):
+    username: str
+    password: str
+    email: str
+
 class Income(BaseModel):
     id: int
     amount: float

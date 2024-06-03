@@ -1,14 +1,14 @@
 from typing import List
-from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi import APIRouter, FastAPI, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import uvicorn
-from datetime import datetime, timedelta
 from app.database import SessionLocal, init_db
-from models import BudgetDB, ExpenseDB, UserDB, IncomeDB
-from app.schemas import Income, Expense, Budget, User
-from bcrypt import hashpw, gensalt
-import jwt
+from models import UserDB, IncomeDB
+from app.schemas import Income, UserLogin, Budget, User
+from auth import encode_token, decode_token, find_user, get_current_user
+from encode import verify_password, get_password_hash
+from fastapi.security import HTTPAuthorizationCredentials
 def get_db():
     db = SessionLocal()
     try:
@@ -21,15 +21,8 @@ router = APIRouter()
 
 class Token(BaseModel):
     access_token: str
-    token_type: str
-def generate_token(username: str) -> str:
-    expiration = datetime.now() + timedelta(minutes=30)
-    token_data = {
-        "sub": username,
-        "exp": expiration
-    }
-    token = jwt.encode(token_data, "secret", algorithm="HS256")
-    return token
+    token_type: str = 'bearer'
+
 @app.on_event("startup")
 def startup():
     init_db()
@@ -65,32 +58,31 @@ async def delete_user(user_id: int):
         db.commit()
         return JSONResponse(status_code=204, content="User deleted")
     
-def verify_pwd(password: str, hashed_password: str) -> bool:
-    salt = gensalt()
-    return str(hashpw(password.encode(), salt)) == hashed_password
 
 @router.post("/users/register", response_model=User)
-async def register(user: User):
+async def register(user: UserLogin):
     with SessionLocal() as db:
-        salt = gensalt()
         user_data = user.model_dump(exclude={'password'})
-        db_user = UserDB(**user_data, password=str(hashpw(user.password.encode(), salt)))
+        db_user = UserDB(**user_data, password = get_password_hash(user.password))
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
         return db_user
 
 
-@router.post("/users/login")
-async def login(user: User):
-    with SessionLocal() as db:
-        db_user = db.query(UserDB).filter(UserDB.username == user.username).first()
-        if db_user is None:
-            raise HTTPException(status_code=404, detail="User not found")
-        if not verify_pwd(user.password, db_user.password):
-            raise HTTPException(status_code=401, detail="Invalid password")
-        token = generate_token(db_user.username)
-        return {"access_token": token, "token_type": "bearer"}
+@router.post("/login", response_model=Token)
+def login(user: UserLogin) -> Token:
+    user_found = find_user(user.username)
+
+    if not user_found:
+        raise HTTPException(status_code=401, detail="Invalid username and/or password")
+    verified = verify_password(user.password, user_found.password)
+
+    if not verified:
+        raise HTTPException(status_code=401, detail="Invalid username and/or password")
+
+    token = encode_token(user_found.username)
+    return Token(access_token=token)
     
 #change password for user 
 @router.put("/users/{user_id}/password")
@@ -99,12 +91,21 @@ async def change_password(user_id: int, new_password: str):
         db_user = db.query(UserDB).filter(UserDB.id == user_id).first()
         if db_user is None:
             raise HTTPException(status_code=404, detail="User not found")
-        salt = gensalt()
-        db_user.password = str(hashpw(new_password.encode(), salt))
+        db_user.password = get_password_hash(new_password)
         db.commit()
         db.refresh(db_user)
         return db_user
     
+# get current user
+@router.post("/me", response_model=User)
+def get_current_user(
+    user: User = Depends(get_current_user),
+) -> User:
+    return User(
+        username=user.username,
+        email=user.email,
+    )
+
 
 @router.put("/users/{user_id}", response_model=User)
 async def update_user(user_id: int, user: User):
@@ -117,7 +118,7 @@ async def update_user(user_id: int, user: User):
         db.commit()
         db.refresh(db_user)
         return db_user
-
+#many to many
 @router.get("/users/{user_id}/incomes", response_model=List[Income])
 async def get_user_incomes(user_id: int):
     with SessionLocal() as db:
