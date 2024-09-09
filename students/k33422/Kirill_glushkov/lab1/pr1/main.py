@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 import uvicorn
 from datetime import datetime
 from app.database import SessionLocal
-from app.models import Budget, Expense, Income, User
+from app.schemas import Budget, Expense, Income, User
 from sqlalchemy import and_, func
 
 
