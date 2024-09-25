@@ -1,6 +1,6 @@
 import asyncio
 
-TOTAL_NUMBERS = 2000000
+TOTAL_NUMBERS = 120000000
 TASK_COUNT = 10
 
 async def compute_range_sum(start, end):

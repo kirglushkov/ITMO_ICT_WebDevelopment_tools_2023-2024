@@ -1,6 +1,6 @@
 import multiprocessing
 
-TOTAL_NUMBERS = 2000000
+TOTAL_NUMBERS = 120000000
 PROCESS_COUNT = 4
 
 def compute_sum(start, end, result_queue):

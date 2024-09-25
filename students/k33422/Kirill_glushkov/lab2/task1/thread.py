@@ -1,6 +1,6 @@
 import threading
 
-TOTAL_NUMBERS = 2000000
+TOTAL_NUMBERS = 120000000
 THREAD_COUNT = 10
 
 # Функция для вычисления суммы в заданном диапазоне
